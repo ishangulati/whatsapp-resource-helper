@@ -7,10 +7,17 @@ import {
   WAMessage,
   WAChatUpdate,
 } from "@adiwajshing/baileys";
+import * as chokidar from "chokidar";
 import * as fs from "fs";
+import * as path from "path";
+
+const CONTACT_REXGEX = /(\+\d{1,2})?(\s+)?((\s)?\d(\s)?){10,11}/g;
+const MEDIA_PATH = "./Media";
 
 async function example() {
-    fs.mkdirSync("./Media");
+  !fs.existsSync(MEDIA_PATH) && fs.mkdirSync(MEDIA_PATH);
+  !fs.existsSync("./Extracted") && fs.mkdirSync("./Extracted");
+  !fs.existsSync("./Done") && fs.mkdirSync("./Done");
   const lastEpocString =
     fs.existsSync("./last_process.time") &&
     fs.readFileSync("./last_process.time");
@@ -34,6 +41,27 @@ async function example() {
     }
 
     conn.on("chat-update", newMessageListener);
+    const watcher = chokidar.watch("./Extracted", {
+      ignored: /^\./,
+      persistent: true,
+    });
+
+    watcher.on("add", async function (filepath) {
+      const filename = path.basename(filepath, ".json");
+      const [sender, remoteJid, msgId] = filename.split("_");
+      console.log("Replying with extracted data: " + filename);
+
+      const m = await conn.loadMessage(remoteJid, msgId);
+      const data = fs.readFileSync(filepath).toString();
+      if (data) {
+        await conn.sendMessage(remoteJid, data, MessageType.extendedText, {
+          quoted: m,
+        });
+      } else {
+        console.warn("No extracted info: " + filepath);
+      }
+      fs.renameSync(filepath, `./Done/${filename}`);
+    });
 
     conn.on("close", ({ reason, isReconnecting }) => {
       console.log(
@@ -42,17 +70,9 @@ async function example() {
           ", reconnecting: " +
           isReconnecting
       );
-
+      watcher.removeAllListeners();
       conn.removeAllListeners("chat-update");
     });
-    // const id = "918882017923-1621625789@g.us";
-    // const m = await conn.loadMessage(id, "3A68E5F38E017741DF6F");
-    // const sentMsg = await conn.sendMessage(
-    //   id,
-    //   "abcs",
-    //   MessageType.extendedText,
-    //   { quoted: m }
-    // );
   });
 
   // loads the auth file credentials if present
@@ -109,16 +129,28 @@ async function example() {
       sender = m.participant;
     }
 
-    const filename = `./Media/${sender}_${chatId}_${m.key.id}`;
+    const filename = `${MEDIA_PATH}/${sender}_${chatId}_${m.key.id}`;
     const messageType = Object.keys(messageContent)[0]; // message will always contain one key signifying what kind of message
     if (messageType === MessageType.text) {
       const text = m.message.conversation;
-      fs.writeFileSync(`${filename}.txt`, text);
-      console.log(sender + " sent text, saved at: " + filename);
+      if (CONTACT_REXGEX.test(text)) {
+        fs.writeFileSync(`${filename}.txt`, text);
+        console.log(sender + " sent text, saved at: " + filename);
+      } else {
+        console.warn(
+          "Text doesn't contain contact hence ignoring: " + filename
+        );
+      }
     } else if (messageType === MessageType.extendedText) {
       const text = m.message.extendedTextMessage.text;
-      fs.writeFileSync(`${filename}.txt`, text);
-      console.log(sender + " sent longtext, saved at: " + filename);
+      if (CONTACT_REXGEX.test(text)) {
+        fs.writeFileSync(`${filename}.txt`, text);
+        console.log(sender + " sent text, saved at: " + filename);
+      } else {
+        console.warn(
+          "Text doesn't contain contact hence ignoring: " + filename
+        );
+      }
     } else if (messageType === MessageType.image) {
       // decode, decrypt & save the media.
       // The extension to the is applied automatically based on the media type
