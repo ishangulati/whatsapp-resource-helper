@@ -11,7 +11,7 @@ import * as chokidar from "chokidar";
 import * as fs from "fs";
 import * as path from "path";
 
-const CONTACT_REXGEX = /(\+\d{1,2})?(\s+)?((\s)?\d(\s)?){10,11}/g;
+const CONTACT_REXGEX = /(\+\d{1,2})?(\s+)?((\s)?\d(\s)?){10,11}/gm;
 const MEDIA_PATH = "./Media";
 
 async function waListener() {
@@ -50,7 +50,7 @@ async function waListener() {
       const filename = path.basename(filepath, ".json");
       const [sender, remoteJid, msgId] = filename.split("_");
       console.log("Replying with extracted data: " + filename);
-
+      conn.chatRead(remoteJid);
       const m = await conn.loadMessage(remoteJid, msgId);
       const data = fs.readFileSync(filepath).toString();
       if (data) {
@@ -138,7 +138,7 @@ async function waListener() {
         console.log(sender + " sent text, saved at: " + filename);
       } else {
         console.warn(
-          "Text doesn't contain contact hence ignoring: " + filename
+          "Text doesn't contain contact hence ignoring: " + filename + " " + text
         );
       }
     } else if (messageType === MessageType.extendedText) {
@@ -148,7 +148,7 @@ async function waListener() {
         console.log(sender + " sent text, saved at: " + filename);
       } else {
         console.warn(
-          "Text doesn't contain contact hence ignoring: " + filename
+          "Text doesn't contain contact hence ignoring: " + filename+ " " + text
         );
       }
     } else if (messageType === MessageType.image) {
