@@ -14,7 +14,7 @@ import * as path from "path";
 const CONTACT_REXGEX = /(\+\d{1,2})?(\s+)?((\s)?\d(\s)?){10,11}/g;
 const MEDIA_PATH = "./Media";
 
-async function example() {
+async function waListener() {
   !fs.existsSync(MEDIA_PATH) && fs.mkdirSync(MEDIA_PATH);
   !fs.existsSync("./Extracted") && fs.mkdirSync("./Extracted");
   !fs.existsSync("./Done") && fs.mkdirSync("./Done");
@@ -188,4 +188,4 @@ async function example() {
   }
 }
 
-example().catch((err) => console.log(`encountered error: ${err}`));
+waListener().catch((err) => console.log(`encountered error: ${err}`));
