@@ -11,9 +11,13 @@
   "license": "ISC",
   "dependencies": {
     "@adiwajshing/baileys": "^3.5.0",
+    "@azure/cognitiveservices-computervision": "^8.0.0",
+    "@azure/ms-rest-js": "^2.5.0",
+    "@azure/storage-blob": "^12.5.0",
     "body-parser": "^1.19.0",
     "chokidar": "^3.5.1",
     "express": "^4.17.1",
+    "node-nlp": "^3.10.2",
     "typescript": "^4.2.4"
   }
 }

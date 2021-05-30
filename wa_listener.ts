@@ -6,12 +6,12 @@ import {
   WAChat,
   WAMessage,
   WAChatUpdate,
+  proto,
 } from "@adiwajshing/baileys";
-import * as chokidar from "chokidar";
 import * as fs from "fs";
-import * as path from "path";
+import extractText from "./readImageData";
+import classify from "./classifier";
 
-const CONTACT_REXGEX = /(\+\d{1,2})?(\s+)?((\s)?\d(\s)?){10,11}/gm;
 const MEDIA_PATH = "./Media";
 
 async function waListener() {
@@ -33,7 +33,7 @@ async function waListener() {
 
   conn.on("initial-data-received", async () => {
     console.log("received all initial messages");
-    const pendingMsgs = extractPendingMessages();
+    const pendingMsgs = await extractPendingMessages();
     console.warn("Pending Messages Count: " + pendingMsgs.length);
 
     for (const message of pendingMsgs) {
@@ -41,27 +41,27 @@ async function waListener() {
     }
 
     conn.on("chat-update", newMessageListener);
-    const watcher = chokidar.watch("./Extracted", {
-      ignored: /^\./,
-      persistent: true,
-    });
+    // const watcher = chokidar.watch("./Extracted", {
+    //   ignored: /^\./,
+    //   persistent: true,
+    // });
 
-    watcher.on("add", async function (filepath) {
-      const filename = path.basename(filepath, ".json");
-      const [sender, remoteJid, msgId] = filename.split("_");
-      console.log("Replying with extracted data: " + filename);
-      conn.chatRead(remoteJid);
-      const m = await conn.loadMessage(remoteJid, msgId);
-      const data = fs.readFileSync(filepath).toString();
-      if (data) {
-        await conn.sendMessage(remoteJid, data, MessageType.extendedText, {
-          quoted: m,
-        });
-      } else {
-        console.warn("No extracted info: " + filepath);
-      }
-      fs.renameSync(filepath, `./Done/${filename}`);
-    });
+    // watcher.on("add", async function (filepath) {
+    //   const filename = path.basename(filepath, ".json");
+    //   const [sender, remoteJid, msgId] = filename.split("_");
+    //   console.log("Replying with extracted data: " + filename);
+    //   conn.chatRead(remoteJid);
+    //   const m = await conn.loadMessage(remoteJid, msgId);
+    //   const data = fs.readFileSync(filepath).toString();
+    //   if (data) {
+    //     await conn.sendMessage(remoteJid, data, MessageType.extendedText, {
+    //       quoted: m,
+    //     });
+    //   } else {
+    //     console.warn("No extracted info: " + filepath);
+    //   }
+    //   fs.renameSync(filepath, `./Done/${filename}`);
+    // });
 
     conn.on("close", ({ reason, isReconnecting }) => {
       console.log(
@@ -70,7 +70,7 @@ async function waListener() {
           ", reconnecting: " +
           isReconnecting
       );
-      watcher.removeAllListeners();
+      //watcher.removeAllListeners();
       conn.removeAllListeners("chat-update");
     });
   });
@@ -94,18 +94,34 @@ async function waListener() {
     console.log("battery level: " + batterylevel);
   });
 
-  function extractPendingMessages(): WAMessage[] {
-    const pendingMsgs: WAMessage[] = [];
-    const c = conn.chats.all().filter((m: WAChat) => +m.t > lastEpocTime);
+  async function extractPendingMessages(): Promise<WAMessage[]> {
+    let pendingMsgs: WAMessage[] = [];
+    const c = conn.chats.all().filter((ch: WAChat) => +ch.t > lastEpocTime);
 
     for (let i = 0; i < c.length; i++) {
-      const m = c[i].messages.filter(
+      const messageResp = await conn.loadMessages(
+        c[i].jid,
+        2000,
+        { fromMe: false },
+        true
+      );
+      // if start is too late in array
+      const startIndex = bs2(
+        messageResp.messages,
+        0,
+        messageResp.messages.length - 1,
+        lastEpocTime
+      );
+
+      const messages = messageResp.messages.slice(startIndex);
+
+      const m = messages.filter(
         (m) =>
           m.messageTimestamp > lastEpocTime &&
           m.messageStubType !== 1 &&
           m.key.fromMe === false
       );
-      pendingMsgs.push(...m.all());
+      pendingMsgs = pendingMsgs.concat(m);
     }
 
     return pendingMsgs.sort(
@@ -129,34 +145,86 @@ async function waListener() {
       sender = m.participant;
     }
 
-    const filename = `${MEDIA_PATH}/${sender}_${chatId}_${m.key.id}`;
+    const filename = `${sender}_${chatId}_${m.key.id}.json`;
+    const timestamp = m.messageTimestamp.toString();
+
+    console.log("Processing:", timestamp, filename);
     const messageType = Object.keys(messageContent)[0]; // message will always contain one key signifying what kind of message
+
+    if (
+      fs.existsSync(`${MEDIA_PATH}/N/${timestamp}_${filename}`) ||
+      fs.existsSync(`${MEDIA_PATH}/R/${timestamp}_${filename}`) ||
+      fs.existsSync(`${MEDIA_PATH}/A/${timestamp}_${filename}`)
+    ) {
+      if (+m.messageTimestamp > lastEpocTime) {
+        lastEpocTime = +m.messageTimestamp;
+        fs.writeFileSync("./last_process.time", lastEpocTime.toString());
+      }
+      return;
+    }
+
     if (messageType === MessageType.text) {
       const text = m.message.conversation;
-      if (CONTACT_REXGEX.test(text)) {
-        fs.writeFileSync(`${filename}.txt`, text);
-        console.log(sender + " sent text, saved at: " + filename);
-      } else {
-        console.warn(
-          "Text doesn't contain contact hence ignoring: " + filename + " " + text
-        );
+      if (text.length < 25) {
+        if (+m.messageTimestamp > lastEpocTime) {
+          lastEpocTime = +m.messageTimestamp;
+          fs.writeFileSync("./last_process.time", lastEpocTime.toString());
+        }
+        return;
       }
+      classify(text, { senderId: sender, timeStamp: timestamp }).then((r) => {
+        r["messageTimestamp"] = timestamp;
+        r["date"] = new Date(+timestamp * 1000);
+        fs.writeFileSync(
+          `${MEDIA_PATH}/${
+            r.type === "requirement" ? "R" : r.type === "available" ? "A" : "N"
+          }/${timestamp}_${filename}`,
+          JSON.stringify(r, null, 4)
+        );
+      });
     } else if (messageType === MessageType.extendedText) {
       const text = m.message.extendedTextMessage.text;
-      if (CONTACT_REXGEX.test(text)) {
-        fs.writeFileSync(`${filename}.txt`, text);
-        console.log(sender + " sent text, saved at: " + filename);
-      } else {
-        console.warn(
-          "Text doesn't contain contact hence ignoring: " + filename+ " " + text
-        );
+      if (text.length < 25) {
+        if (+m.messageTimestamp > lastEpocTime) {
+          lastEpocTime = +m.messageTimestamp;
+          fs.writeFileSync("./last_process.time", lastEpocTime.toString());
+        }
+        return;
       }
+      classify(text, { senderId: sender, timeStamp: timestamp }).then((r) => {
+        r["messageTimestamp"] = timestamp;
+        r["date"] = new Date(+timestamp * 1000);
+        fs.writeFileSync(
+          `${MEDIA_PATH}/${
+            r.type === "requirement" ? "R" : r.type === "available" ? "A" : "N"
+          }/${timestamp}_${filename}`,
+          JSON.stringify(r, null, 4)
+        );
+      });
     } else if (messageType === MessageType.image) {
       // decode, decrypt & save the media.
       // The extension to the is applied automatically based on the media type
       try {
-        const savedFile = await conn.downloadAndSaveMediaMessage(m, filename);
-        console.log(sender + " sent media, saved at: " + filename);
+        const buffer = await conn.downloadMediaMessage(m);
+        const blobfilename =
+          bufferToBase64(m.message.imageMessage.fileSha256) || filename;
+        let text = await extractText(buffer, blobfilename);
+        text += "\n" + m.message.imageMessage.caption;
+        classify(text, { senderId: sender, timeStamp: timestamp }).then((r) => {
+          r["messageTimestamp"] = timestamp;
+          r["date"] = new Date(+timestamp * 1000);
+          r["blobfile"] = blobfilename;
+          fs.writeFileSync(
+            `${MEDIA_PATH}/${
+              r.type === "requirement"
+                ? "R"
+                : r.type === "available"
+                ? "A"
+                : "N"
+            }/${timestamp}_${filename}`,
+            JSON.stringify(r, null, 4)
+          );
+        });
       } catch (err) {
         console.log("error in decoding message: " + err);
       }
@@ -186,6 +254,32 @@ async function waListener() {
     const m = chat.messages.all()[0]; // pull the new message from the update
     await processMessage(m);
   }
+}
+
+function bufferToBase64(buffer) {
+  if (buffer) return Base64EncodeUrl(buffer.toString("base64"));
+  return "";
+}
+
+function Base64EncodeUrl(str) {
+  return str.replace(/\+/g, "-").replace(/\//g, "_").replace(/\=+$/, "");
+}
+
+function Base64DecodeUrl(str) {
+  str = (str + "===").slice(0, str.length + (str.length % 4));
+  return str.replace(/-/g, "+").replace(/_/g, "/");
+}
+
+function bs2(array, left, right, elem) {
+  if (left >= right) return left;
+
+  let middle = 0;
+  middle = Math.floor((left + right) / 2);
+  if (elem > array[middle].messageTimestamp)
+    return bs2(array, middle + 1, right, elem);
+  if (elem < array[middle].messageTimestamp)
+    return bs2(array, left, middle, elem); //<--- was: middle-1
+  return middle; // element existed into array
 }
 
 waListener().catch((err) => console.log(`encountered error: ${err}`));

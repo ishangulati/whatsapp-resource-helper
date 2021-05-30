@@ -2,6 +2,7 @@ node_modules/
 Media/
 Extracted/
 Done/
+out/
 auth_info.json
 last_process.time
 package-lock.json
