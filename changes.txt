@@ -4,8 +4,8 @@ number extract -> non digit non alphabet in between, +91- format
 blood group regex, A Neg
 !!!!posts without contact info -> ecmo available at hospitals allow?
 sender number if I dm me, message me, pls call, help me, i need, any leads for, my friend,ping me, please help && ||is text only|| or invalid contact in requirement
-
 blood group ab
+extract location if not null
 
 sorting -> highest votes/leads in last 2days, week
 reply to requirement whatsapp

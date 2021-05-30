@@ -6,7 +6,6 @@ import {
   WAChat,
   WAMessage,
   WAChatUpdate,
-  proto,
 } from "@adiwajshing/baileys";
 import * as fs from "fs";
 import extractText from "./readImageData";
@@ -41,27 +40,6 @@ async function waListener() {
     }
 
     conn.on("chat-update", newMessageListener);
-    // const watcher = chokidar.watch("./Extracted", {
-    //   ignored: /^\./,
-    //   persistent: true,
-    // });
-
-    // watcher.on("add", async function (filepath) {
-    //   const filename = path.basename(filepath, ".json");
-    //   const [sender, remoteJid, msgId] = filename.split("_");
-    //   console.log("Replying with extracted data: " + filename);
-    //   conn.chatRead(remoteJid);
-    //   const m = await conn.loadMessage(remoteJid, msgId);
-    //   const data = fs.readFileSync(filepath).toString();
-    //   if (data) {
-    //     await conn.sendMessage(remoteJid, data, MessageType.extendedText, {
-    //       quoted: m,
-    //     });
-    //   } else {
-    //     console.warn("No extracted info: " + filepath);
-    //   }
-    //   fs.renameSync(filepath, `./Done/${filename}`);
-    // });
 
     conn.on("close", ({ reason, isReconnecting }) => {
       console.log(
@@ -151,89 +129,58 @@ async function waListener() {
     console.log("Processing:", timestamp, filename);
     const messageType = Object.keys(messageContent)[0]; // message will always contain one key signifying what kind of message
 
-    if (
-      fs.existsSync(`${MEDIA_PATH}/N/${timestamp}_${filename}`) ||
-      fs.existsSync(`${MEDIA_PATH}/R/${timestamp}_${filename}`) ||
-      fs.existsSync(`${MEDIA_PATH}/A/${timestamp}_${filename}`)
-    ) {
-      if (+m.messageTimestamp > lastEpocTime) {
-        lastEpocTime = +m.messageTimestamp;
-        fs.writeFileSync("./last_process.time", lastEpocTime.toString());
-      }
+    const MESSAGE_FILEPATH = `${MEDIA_PATH}/Messages/${timestamp}_${filename}`;
+    if (fs.existsSync(MESSAGE_FILEPATH)) {
+      updateTimeStamp(m.messageTimestamp);
       return;
     }
 
-    if (messageType === MessageType.text) {
-      const text = m.message.conversation;
-      if (text.length < 25) {
-        if (+m.messageTimestamp > lastEpocTime) {
-          lastEpocTime = +m.messageTimestamp;
-          fs.writeFileSync("./last_process.time", lastEpocTime.toString());
-        }
-        return;
-      }
-      classify(text, { senderId: sender, timeStamp: timestamp }).then((r) => {
-        r["messageTimestamp"] = timestamp;
-        r["date"] = new Date(+timestamp * 1000);
-        fs.writeFileSync(
-          `${MEDIA_PATH}/${
-            r.type === "requirement" ? "R" : r.type === "available" ? "A" : "N"
-          }/${timestamp}_${filename}`,
-          JSON.stringify(r, null, 4)
-        );
-      });
-    } else if (messageType === MessageType.extendedText) {
-      const text = m.message.extendedTextMessage.text;
-      if (text.length < 25) {
-        if (+m.messageTimestamp > lastEpocTime) {
-          lastEpocTime = +m.messageTimestamp;
-          fs.writeFileSync("./last_process.time", lastEpocTime.toString());
-        }
-        return;
-      }
-      classify(text, { senderId: sender, timeStamp: timestamp }).then((r) => {
-        r["messageTimestamp"] = timestamp;
-        r["date"] = new Date(+timestamp * 1000);
-        fs.writeFileSync(
-          `${MEDIA_PATH}/${
-            r.type === "requirement" ? "R" : r.type === "available" ? "A" : "N"
-          }/${timestamp}_${filename}`,
-          JSON.stringify(r, null, 4)
-        );
-      });
+    let text = "";
+    let blobfilename = "";
+
+    if (
+      messageType === MessageType.text ||
+      messageType === MessageType.extendedText
+    ) {
+      text = m.message.conversation || m.message.extendedTextMessage.text;
     } else if (messageType === MessageType.image) {
       // decode, decrypt & save the media.
       // The extension to the is applied automatically based on the media type
+      text = m.message.imageMessage.caption || "";
       try {
         const buffer = await conn.downloadMediaMessage(m);
-        const blobfilename =
+        blobfilename =
           bufferToBase64(m.message.imageMessage.fileSha256) || filename;
-        let text = await extractText(buffer, blobfilename);
-        text += "\n" + m.message.imageMessage.caption;
-        classify(text, { senderId: sender, timeStamp: timestamp }).then((r) => {
-          r["messageTimestamp"] = timestamp;
-          r["date"] = new Date(+timestamp * 1000);
-          r["blobfile"] = blobfilename;
-          fs.writeFileSync(
-            `${MEDIA_PATH}/${
-              r.type === "requirement"
-                ? "R"
-                : r.type === "available"
-                ? "A"
-                : "N"
-            }/${timestamp}_${filename}`,
-            JSON.stringify(r, null, 4)
-          );
-        });
+        text += "\n" + (await extractText(buffer, blobfilename));
       } catch (err) {
-        console.log("error in decoding message: " + err);
+        console.log("error in extracting media message: " + err);
       }
+    } else {
+      updateTimeStamp(m.messageTimestamp);
+      return;
     }
 
-    if (+m.messageTimestamp > lastEpocTime) {
-      lastEpocTime = +m.messageTimestamp;
-      fs.writeFileSync("./last_process.time", lastEpocTime.toString());
+    if (text.length < 25) {
+      updateTimeStamp(m.messageTimestamp);
+      return;
     }
+
+    fs.writeFileSync(
+      MESSAGE_FILEPATH,
+      JSON.stringify(
+        {
+          source: "whatsapp",
+          text,
+          senderId: sender,
+          blobfilename,
+          timestamp,
+          date: new Date(+timestamp * 1000),
+        },
+        null,
+        4
+      )
+    );
+    updateTimeStamp(m.messageTimestamp);
   }
 
   async function newMessageListener(chat: WAChatUpdate) {
@@ -253,6 +200,13 @@ async function waListener() {
 
     const m = chat.messages.all()[0]; // pull the new message from the update
     await processMessage(m);
+  }
+
+  function updateTimeStamp(messageTimestamp) {
+    if (+messageTimestamp > lastEpocTime) {
+      lastEpocTime = +messageTimestamp;
+      fs.writeFileSync("./last_process.time", lastEpocTime.toString());
+    }
   }
 }
 

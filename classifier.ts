@@ -7,6 +7,12 @@ const classifier = new NlpManager({
   nlu: { useNoneFeature: false },
 });
 
+const locationExtractor = new NlpManager({
+  languages: ["en"],
+  threshold: 0.81,
+  nlu: { useNoneFeature: false },
+});
+
 const CATEGORIES = [
   "medicine",
   "food",
@@ -34,6 +40,12 @@ const CATEGORIES = [
   "supply",
   "Distributor",
   "sold",
+  "They are providing",
+  "Personally verified",
+  "Hope it helps",
+  "IF YOU ARE IN NEED",
+  "for patients only",
+  "foundation",
 ].forEach((value) => classifier.addDocument("en", value, "available"));
 
 [
@@ -62,6 +74,9 @@ const CATEGORIES = [
   "urgent need",
   "Pl inform",
   "need for rent",
+  "has been prescribed",
+  "if available",
+  "can anyone help"
 ].forEach((value) => classifier.addDocument("en", value, "requirement"));
 
 classifier.addDocument("en", "Beware", "none");
@@ -69,7 +84,7 @@ classifier.addDocument("en", "Beware", "none");
 classifier.addRegexEntity(
   "blood",
   "en",
-  /(\s)+(A|B|AB|O)(\s)?(\+ve\b|\-ve\b|-\B|\+\B|pos|neg)/gim
+  /(\b)?(A|B|AB|O)(\s)?(\+ve\b|\-ve\b|-\B|\+\B|pos|neg)/gim
 );
 
 for (const categoryKey of CATEGORIES) {
@@ -84,17 +99,15 @@ for (const categoryKey of CATEGORIES) {
 }
 
 data.cities.forEach((value) =>
-  classifier.addNamedEntityText("location", value, "en", [value])
+  locationExtractor.addNamedEntityText("location", value, "en", [value])
 );
 
-export default async function classify(message, senderDetails) {
+export default async function classify(message, source, senderId) {
   await classifier.train();
   const length = message && message.length;
   const result = {
     debug: { message, length },
     type: "None",
-    senderId: senderDetails.senderId,
-    sendTime: senderDetails.timeStamp,
   };
 
   if (length > 1000) {
@@ -112,7 +125,9 @@ export default async function classify(message, senderDetails) {
     .map((e) => normalizeContact(e.resolution.value));
 
   const extractedContact = normalizeContact(fallbackContact(message));
-  if (extractedContact) contacts.push(extractedContact);
+  if (extractedContact !== "+91" && extractedContact !== "") {
+    contacts.push(extractedContact);
+  }
 
   contacts = contacts.filter(onlyUnique);
 
@@ -120,7 +135,7 @@ export default async function classify(message, senderDetails) {
   if (contacts.length === 0) {
     for (const word of data.senderkeywords) {
       if (message.indexOf(word.toLowerCase()) > -1) {
-        contacts.push(getSenderContact(senderDetails.senderId));
+        contacts.push(getSenderContact(senderId));
         result["debug"]["senderContact"] = true;
         break;
       }
@@ -128,10 +143,6 @@ export default async function classify(message, senderDetails) {
   }
 
   result["contact"] = contacts;
-  result["location"] = classifications.entities
-    .filter((e) => e.entity === "location" && e.accuracy > 0.8)
-    .map((c) => c.option)
-    .filter(onlyUnique);
 
   const resources = {};
   CATEGORIES.forEach((ck) => {
@@ -158,14 +169,16 @@ export default async function classify(message, senderDetails) {
       .map((e) =>
         e.sourceText
           .replace(/\s/g, "")
-          // for handle AB cases change 'A+' to 'A+ '
+          // for handle AB cases change 'A+' & 'A+ve' to 'A+ '
           .replace(/pos/gi, "+ ")
           .replace(/neg/gi, "- ")
+          .replace(/ve/gi, " ")
           .substr(0, 3)
           .trim()
           .toUpperCase()
       )
-      .filter(onlyUnique);
+      .filter(onlyUnique)
+      .sort();
     if (resources["blood"].length === 0) {
       resources["blood"] = ["Any Group"];
     }
@@ -180,6 +193,16 @@ export default async function classify(message, senderDetails) {
     result["debug"]["prevtype"] = result["type"];
     result["type"] = "None";
     result["debug"]["typescore"] = 1;
+  }
+
+  // Do it only when have to since its time consuming
+  if (result["type"] !== "None") {
+    await locationExtractor.train();
+    const locationsClasses = await classifier.process("en", message);
+    result["location"] = locationsClasses.entities
+      .filter((e) => e.entity === "location" && e.accuracy > 0.8)
+      .map((c) => c.option)
+      .filter(onlyUnique);
   }
   console.log(result);
   return result;

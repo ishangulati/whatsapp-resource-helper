@@ -40,7 +40,7 @@ export default async function extractText(data, filename) {
     const extExists = await blockBlobTxtClient.exists();
     if (extExists) {
       const downloadBlockBlobResponse = await blockBlobTxtClient.download(0);
-      console.log("Downloaded blob content...");
+      console.log("Downloaded extracted cache Data.");
       const responseStr = await streamToString(
         downloadBlockBlobResponse.readableStreamBody
       );
