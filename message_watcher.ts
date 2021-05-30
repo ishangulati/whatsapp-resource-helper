@@ -17,7 +17,8 @@ watcher.on("add", async function (filepath) {
   const classificationResult = await classify(
     text || data.debug.message,
     messageInfo.source || "whatsapp",
-    messageInfo.senderId || sender
+    messageInfo.senderId || sender,
+    { filename }
   );
   const resultToWrite = { ...messageInfo, ...classificationResult };
 

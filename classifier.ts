@@ -76,7 +76,7 @@ const CATEGORIES = [
   "need for rent",
   "has been prescribed",
   "if available",
-  "can anyone help"
+  "can anyone help",
 ].forEach((value) => classifier.addDocument("en", value, "requirement"));
 
 classifier.addDocument("en", "Beware", "none");
@@ -102,11 +102,16 @@ data.cities.forEach((value) =>
   locationExtractor.addNamedEntityText("location", value, "en", [value])
 );
 
-export default async function classify(message, source, senderId) {
+export default async function classify(
+  message,
+  source,
+  senderId,
+  addtionalInfo
+) {
   await classifier.train();
   const length = message && message.length;
   const result = {
-    debug: { message, length },
+    debug: { message, length, ...addtionalInfo },
     type: "None",
   };
 

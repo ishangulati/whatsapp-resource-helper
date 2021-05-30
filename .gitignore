@@ -3,6 +3,7 @@ Media/
 Extracted/
 Done/
 out/
+Samples/
 auth_info.json
 last_process.time
 package-lock.json
