@@ -3,10 +3,13 @@ import * as fs from "fs";
 import * as path from "path";
 import classify from "./classifier";
 
-const watcher = chokidar.watch("./Media/Messages", {
+const watcher = chokidar.watch("./temp/Messages", {
   ignored: /^\./,
   persistent: true,
 });
+const POST_PATH = "./temp/Extracted";
+
+!fs.existsSync(POST_PATH) && fs.mkdirSync(POST_PATH);
 
 watcher.on("add", async function (filepath) {
   const filename = path.basename(filepath, ".json");
@@ -17,14 +20,23 @@ watcher.on("add", async function (filepath) {
   const classificationResult = await classify(
     text || data.debug.message,
     messageInfo.source || "whatsapp",
-    messageInfo.senderId || sender,
-    { filename }
+    sender
   );
-  const resultToWrite = { ...messageInfo, ...classificationResult };
+  const resultToWrite = {
+    ...messageInfo,
+    ...classificationResult,
+    blobfilename: messageInfo.blobfile,
+    timestamp: +timestamp,
+    filename,
+    source: messageInfo.source || "whatsapp",
+    senderId: sender,
+  };
 
   fs.writeFileSync(
-    `./Extracted/${filename}.json`,
+    `${POST_PATH}/${filename}.json`,
     JSON.stringify(resultToWrite, null, 4)
   );
   fs.unlinkSync(filepath);
 });
+
+console.log("Listening to messages....");

@@ -80,7 +80,7 @@ export default {
     Oximeter: ["Oximeter", "Pulse Oximeter"],
     Respirometer: ["Respirometer"],
   },
-  beds: {
+  bed: {
     "Oxygen Beds": ["Oxygen Beds"],
     "ICU Beds": ["ICU Beds"],
     "Home ICU": ["Home ICU", "ICU Setup"],
@@ -96,6 +96,7 @@ export default {
     "normal blood",
     "plasma",
     "blood",
+    "platelet",
   ],
   senderkeywords: [
     "dm me",
@@ -103,7 +104,7 @@ export default {
     "pls call me",
     "help me",
     "i need",
-    "any leads for",
+    "any leads",
     "any lead for",
     "my friend",
     "ping me",
@@ -126,6 +127,7 @@ export default {
     "my aunt",
     "reply",
     "for a friend",
+    "we'll collect",
   ],
   cities: [
     "Delhi",

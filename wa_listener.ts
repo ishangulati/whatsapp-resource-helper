@@ -9,14 +9,11 @@ import {
 } from "@adiwajshing/baileys";
 import * as fs from "fs";
 import extractText from "./readImageData";
-import classify from "./classifier";
 
-const MEDIA_PATH = "./Media";
+const MEDIA_PATH = "./temp/Messages";
 
 async function waListener() {
   !fs.existsSync(MEDIA_PATH) && fs.mkdirSync(MEDIA_PATH);
-  !fs.existsSync("./Extracted") && fs.mkdirSync("./Extracted");
-  !fs.existsSync("./Done") && fs.mkdirSync("./Done");
   const lastEpocString =
     fs.existsSync("./last_process.time") &&
     fs.readFileSync("./last_process.time");

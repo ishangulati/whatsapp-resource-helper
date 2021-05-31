@@ -4,6 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start-w": "tsc && node ./dist/wa_listener.js",
+    "start-m": "tsc && node ./dist/message_watcher.js",
+    "start-l": "tsc && node ./dist/lead_poster.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,6 +17,7 @@
     "@azure/cognitiveservices-computervision": "^8.0.0",
     "@azure/ms-rest-js": "^2.5.0",
     "@azure/storage-blob": "^12.5.0",
+    "axios": "^0.21.1",
     "body-parser": "^1.19.0",
     "chokidar": "^3.5.1",
     "express": "^4.17.1",

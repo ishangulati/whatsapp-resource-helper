@@ -18,7 +18,7 @@ const CATEGORIES = [
   "food",
   "ambulance",
   "oxygen",
-  "beds",
+  "bed",
   "therapy",
 ];
 
@@ -46,43 +46,63 @@ const CATEGORIES = [
   "IF YOU ARE IN NEED",
   "for patients only",
   "foundation",
+  // "if someone needs",
+  // "if anybody needs",
+  // "anyone need this",
+  // "helpline",
+  // "all india",
+  // "available for",
+  // "available at",
+  // "beds available",
+  "replacement basis", //blood donation
 ].forEach((value) => classifier.addDocument("en", value, "available"));
 
 [
-  "required",
+  "need",
+  "needs",
   "needed",
   "urgent",
   "urgently",
+  "urgent need",
+  "I need",
+  "Urgently needed",
+  "needed urgently",
   "have any leads",
   "any leads for",
+  "any leads",
   "requirement",
   "requirements",
+  "required",
+  "require",
+  "required for",
   "looking for",
   "attendant",
   "patient name",
-  "need",
-  "needs",
-  "help",
-  "require",
-  "required for",
+  "please help",
   "SOS",
-  "please",
   "verified leads only",
   "i want",
   "blood needed",
   "kaha milega",
-  "urgent need",
   "Pl inform",
   "need for rent",
   "has been prescribed",
   "if available",
   "can anyone help",
+  // "hrct score",
+  // "only verified leads",
+  // "plasma needed",
+  "my",
+  "father",
+  "mother",
+  "cousin",
+  "bother",
 ].forEach((value) => classifier.addDocument("en", value, "requirement"));
 
 classifier.addDocument("en", "Beware", "none");
 
 classifier.addRegexEntity(
-  "blood",
+  "bloodgroup",
   "en",
   /(\b)?(A|B|AB|O)(\s)?(\+ve\b|\-ve\b|-\B|\+\B|pos|neg)/gim
 );
@@ -102,16 +122,11 @@ data.cities.forEach((value) =>
   locationExtractor.addNamedEntityText("location", value, "en", [value])
 );
 
-export default async function classify(
-  message,
-  source,
-  senderId,
-  addtionalInfo
-) {
+export default async function classify(message, source, senderId) {
   await classifier.train();
   const length = message && message.length;
   const result = {
-    debug: { message, length, ...addtionalInfo },
+    debug: { message, length },
     type: "None",
   };
 
@@ -127,10 +142,11 @@ export default async function classify(
 
   let contacts = classifications.entities
     .filter((e) => e.entity === "phonenumber")
-    .map((e) => normalizeContact(e.resolution.value));
+    .map((e) => normalizeContact(e.resolution.value))
+    .filter(validateNormalizedNumber);
 
   const extractedContact = normalizeContact(fallbackContact(message));
-  if (extractedContact !== "+91" && extractedContact !== "") {
+  if (validateNormalizedNumber(extractedContact)) {
     contacts.push(extractedContact);
   }
 
@@ -169,8 +185,8 @@ export default async function classify(
     }
   }
   if (extractBloodGroup) {
-    resources["blood"] = classifications.entities
-      .filter((e) => e.entity === "blood")
+    resources["bloodgroup"] = classifications.entities
+      .filter((e) => e.entity === "bloodgroup")
       .map((e) =>
         e.sourceText
           .replace(/\s/g, "")
@@ -184,8 +200,12 @@ export default async function classify(
       )
       .filter(onlyUnique)
       .sort();
-    if (resources["blood"].length === 0) {
-      resources["blood"] = ["Any Group"];
+
+    if (
+      resources["bloodgroup"].length === 0 ||
+      message.indexOf("any blood group") > -1
+    ) {
+      resources["bloodgroup"].push("Any Group");
     }
   }
 
@@ -238,7 +258,12 @@ function onlyUnique(value, index, self) {
 function normalizeContact(phoneNumber) {
   let normalizedContact = phoneNumber.replace(/[^0-9.]/g, "");
   // helpline number
-  if (normalizedContact[0] === "1") {
+  if (
+    normalizedContact.startsWith("1") &&
+    // numbers like 100, 1075, 1800 209 2359
+    ((normalizeContact.length >= 3 && normalizeContact.length < 6) ||
+      normalizeContact.length === 11)
+  ) {
     //do nothing
   } else {
     const number = normalizedContact.substr(-10);
@@ -250,4 +275,18 @@ function normalizeContact(phoneNumber) {
 
 function getSenderContact(senderId) {
   return "+" + senderId.split("@")[0];
+}
+
+function validateNormalizedNumber(phoneNumber) {
+  if (
+    phoneNumber.startsWith("1") &&
+    // numbers like 100, 1075, 1800 209 2359
+    ((phoneNumber.length >= 3 && phoneNumber.length < 6) ||
+      phoneNumber.length === 11)
+  ) {
+    return true;
+  } else {
+    // along with +91
+    return phoneNumber.length === 13;
+  }
 }
