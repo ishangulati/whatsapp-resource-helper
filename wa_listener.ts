@@ -11,6 +11,13 @@ import * as fs from "fs";
 import extractText from "./readImageData";
 
 const MEDIA_PATH = "./temp/Messages";
+const WHITELIST_CHATS = [
+  '918882862622-1620221666@g.us',//'Pranada- Covid help'
+  '918368724288-1619193519@g.us', //'Khwaish Team😎💥'
+  '919811120453-1619274698@g.us', //'Let's save India!'
+  '919468345974-1619170723@g.us',//'COVID DELHI HELP'
+  //'918882017923-1621625789@g.us', //Testing
+];
 
 async function waListener() {
   !fs.existsSync(MEDIA_PATH) && fs.mkdirSync(MEDIA_PATH);
@@ -71,7 +78,14 @@ async function waListener() {
 
   async function extractPendingMessages(): Promise<WAMessage[]> {
     let pendingMsgs: WAMessage[] = [];
-    const c = conn.chats.all().filter((ch: WAChat) => +ch.t > lastEpocTime);
+    const c = conn.chats
+      .all()
+      .filter(
+        (ch: WAChat) =>
+          +ch.t > lastEpocTime &&
+          (WHITELIST_CHATS.length === 0 ||
+            WHITELIST_CHATS.indexOf(ch.jid) > -1)
+      );
 
     for (let i = 0; i < c.length; i++) {
       const messageResp = await conn.loadMessages(
@@ -120,13 +134,18 @@ async function waListener() {
       sender = m.participant;
     }
 
+    if (WHITELIST_CHATS.length && WHITELIST_CHATS.indexOf(chatId) === -1) {
+      updateTimeStamp(m.messageTimestamp);
+      return;
+    }
+    
     const filename = `${sender}_${chatId}_${m.key.id}.json`;
     const timestamp = m.messageTimestamp.toString();
 
     console.log("Processing:", timestamp, filename);
     const messageType = Object.keys(messageContent)[0]; // message will always contain one key signifying what kind of message
 
-    const MESSAGE_FILEPATH = `${MEDIA_PATH}/Messages/${timestamp}_${filename}`;
+    const MESSAGE_FILEPATH = `${MEDIA_PATH}/${timestamp}_${filename}`;
     if (fs.existsSync(MESSAGE_FILEPATH)) {
       updateTimeStamp(m.messageTimestamp);
       return;
