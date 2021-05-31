@@ -23,11 +23,13 @@ const CATEGORIES = [
 ];
 
 [
-  "on rent",
+  "available on rent",
   "available",
-  "free",
+  "free of cost",
   "sewa",
   "verified",
+  "use and return",
+  "refundable",
   "avl",
   "patient should",
   "dm for covid help",
@@ -43,19 +45,21 @@ const CATEGORIES = [
   "They are providing",
   "Personally verified",
   "Hope it helps",
-  "IF YOU ARE IN NEED",
+  // "IF YOU ARE IN NEED",
   "for patients only",
   "foundation",
-  // "if someone needs",
-  // "if anybody needs",
+  "if someone needs",
+  "if anybody needs",
   // "anyone need this",
   // "helpline",
   // "all india",
   // "available for",
   // "available at",
   // "beds available",
+  "pharma",
+  "chemist available",
   "replacement basis", //blood donation
-].forEach((value) => classifier.addDocument("en", value, "available"));
+].forEach((value) => classifier.addDocument("en", value, "availability"));
 
 [
   "need",
@@ -89,6 +93,7 @@ const CATEGORIES = [
   "has been prescribed",
   "if available",
   "can anyone help",
+  "very urgent",
   // "hrct score",
   // "only verified leads",
   // "plasma needed",
@@ -97,6 +102,9 @@ const CATEGORIES = [
   "mother",
   "cousin",
   "bother",
+  "we need",
+  "Patient is in",
+  "patient name",
 ].forEach((value) => classifier.addDocument("en", value, "requirement"));
 
 classifier.addDocument("en", "Beware", "none");
