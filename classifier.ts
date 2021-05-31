@@ -231,7 +231,7 @@ export default async function classify(message, source, senderId) {
   // Do it only when have to since its time consuming
   if (result["type"] !== "None") {
     await locationExtractor.train();
-    const locationsClasses = await classifier.process("en", message);
+    const locationsClasses = await locationExtractor.process("en", message);
     result["location"] = locationsClasses.entities
       .filter((e) => e.entity === "location" && e.accuracy > 0.8)
       .map((c) => c.option)
