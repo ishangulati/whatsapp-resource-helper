@@ -7,12 +7,6 @@ const classifier = new NlpManager({
   nlu: { useNoneFeature: false },
 });
 
-const locationExtractor = new NlpManager({
-  languages: ["en"],
-  threshold: 0.81,
-  nlu: { useNoneFeature: false },
-});
-
 const CATEGORIES = [
   "medicine",
   "food",
@@ -126,10 +120,6 @@ for (const categoryKey of CATEGORIES) {
   }
 }
 
-data.cities.forEach((value) =>
-  locationExtractor.addNamedEntityText("location", value, "en", [value])
-);
-
 export default async function classify(message, source, senderId) {
   await classifier.train();
   const length = message && message.length;
@@ -228,21 +218,20 @@ export default async function classify(message, source, senderId) {
     result["debug"]["typescore"] = 1;
   }
 
-  // Do it only when have to since its time consuming
-  if (result["type"] !== "None") {
-    await locationExtractor.train();
-    const locationsClasses = await locationExtractor.process("en", message);
-    result["location"] = locationsClasses.entities
-      .filter((e) => e.entity === "location" && e.accuracy > 0.8)
-      .map((c) => c.option)
-      .filter(onlyUnique);
-  }
+  result["location"] = [];
+
+  data.cities.forEach((city) => {
+    if (new RegExp(`\\b${city.toLowerCase()}\\b`).test(message)) {
+      result["location"].push(city);
+    }
+  });
+
   console.log(result);
   return result;
 }
 
 function extractFields(data, fieldname) {
-  const extRegex = new RegExp(`(?<=${fieldname})(\s*:*\s*)(.*)\n`, "gim");
+  const extRegex = new RegExp(`(?<=${fieldname})(\\s*:*\\s*)(.*)\\n`, "gim");
   const matches = extRegex.exec(data);
   if (matches && matches.length > 2) {
     return matches[2];
