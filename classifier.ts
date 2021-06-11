@@ -169,8 +169,6 @@ export default async function classify(message, source, senderId) {
     }
   }
 
-  result["contact"] = contacts;
-
   const resources = {};
   CATEGORIES.forEach((ck) => {
     const rs = classifications.entities
@@ -219,12 +217,20 @@ export default async function classify(message, source, senderId) {
   result["name"] = extractFields(message, "name");
   result["verified"] = extractFields(message, "verified");
 
+  if (contacts.length === 0 && resources["vaccine"].length > 0) {
+    contacts = classifications.entities
+      .filter((e) => e.entity === "url")
+      .map((e) => e.resolution.value);
+  }
+
   // no resources identified
   if (Object.keys(resources).length === 0 || contacts.length === 0) {
     result["debug"]["prevtype"] = result["type"];
     result["type"] = "None";
     result["debug"]["typescore"] = 1;
   }
+
+  result["contact"] = contacts;
 
   result["location"] = [];
 
@@ -279,11 +285,11 @@ function normalizeContact(phoneNumber) {
 }
 
 function getSenderContact(senderId) {
-  // handle twitter handle
-  if (/[a-zA-Z]+/gi.test(senderId)) {
-    return senderId;
-  } else {
+  // handle twitter / whatsapp handle
+  if (senderId.indexOf("whatsapp.net") > -1) {
     return "+" + senderId.split("@")[0];
+  } else {
+    return senderId;
   }
 }
 
