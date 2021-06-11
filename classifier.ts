@@ -14,6 +14,7 @@ const CATEGORIES = [
   "oxygen",
   "bed",
   "therapy",
+  "vaccine",
 ];
 
 [
@@ -88,6 +89,11 @@ const CATEGORIES = [
   "if available",
   "can anyone help",
   "very urgent",
+  "patient's name",
+  "required more",
+  "We need ECMO or Lung Transplant",
+  "anyone have any idea about",
+  "for a very critical patient",
   // "hrct score",
   // "only verified leads",
   // "plasma needed",
@@ -99,6 +105,8 @@ const CATEGORIES = [
   "we need",
   "Patient is in",
   "patient name",
+  "dose",
+  "vial",
 ].forEach((value) => classifier.addDocument("en", value, "requirement"));
 
 classifier.addDocument("en", "Beware", "none");
@@ -234,7 +242,7 @@ function extractFields(data, fieldname) {
   const extRegex = new RegExp(`(?<=${fieldname})(\\s*:*\\s*)(.*)\\n`, "gim");
   const matches = extRegex.exec(data);
   if (matches && matches.length > 2) {
-    return matches[2];
+    return matches[2].substr(0, 25).trim();
   }
   return "";
 }
@@ -271,7 +279,12 @@ function normalizeContact(phoneNumber) {
 }
 
 function getSenderContact(senderId) {
-  return "+" + senderId.split("@")[0];
+  // handle twitter handle
+  if (/[a-zA-Z]+/gi.test(senderId)) {
+    return senderId;
+  } else {
+    return "+" + senderId.split("@")[0];
+  }
 }
 
 function validateNormalizedNumber(phoneNumber) {

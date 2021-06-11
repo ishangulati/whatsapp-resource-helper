@@ -7,17 +7,25 @@ import {
   WAMessage,
   WAChatUpdate,
 } from "@adiwajshing/baileys";
+import * as chokidar from "chokidar";
 import * as fs from "fs";
 import extractText from "./readImageData";
+import * as path from "path";
+import {
+  ExtractedContact,
+  IExtractedArrays,
+  IListingContact,
+} from "./types/Models";
+import axios from "axios";
 
 const MEDIA_PATH = "./temp/Messages";
-const WHITELIST_CHATS = [
-  '918882862622-1620221666@g.us',//'Pranada- Covid help'
-  '918368724288-1619193519@g.us', //'Khwaish Team😎💥'
-  '919811120453-1619274698@g.us', //'Let's save India!'
-  '919468345974-1619170723@g.us',//'COVID DELHI HELP'
-  //'918882017923-1621625789@g.us', //Testing
-];
+// const WHITELIST_CHATS = [
+//   "918882862622-1620221666@g.us", //'Pranada- Covid help'
+//   "918368724288-1619193519@g.us", //'Khwaish Team😎💥'
+//   "919811120453-1619274698@g.us", //'Let's save India!'
+//   "919468345974-1619170723@g.us", //'COVID DELHI HELP'
+//   "918882017923-1621625789@g.us", //Testing
+// ];
 
 async function waListener() {
   !fs.existsSync(MEDIA_PATH) && fs.mkdirSync(MEDIA_PATH);
@@ -44,6 +52,51 @@ async function waListener() {
     }
 
     conn.on("chat-update", newMessageListener);
+    const watcher = chokidar.watch("./temp/Reply/R", {
+      ignored: /^\./,
+      persistent: true,
+    });
+
+    watcher.on("add", async function (filepath) {
+      const filename = path.basename(filepath, ".json");
+      const [_, sender, remoteJid, msgId] = filename.split("_");
+
+      const SAFETOREPLY =
+        remoteJid === "918882017923-1621625789@g.us" ||
+        sender === "918447559779@s.whatsapp.net" ||
+        sender === "919872825242@s.whatsapp.net";
+
+      console.log("Replying with extracted data: " + filename);
+      if (SAFETOREPLY) {
+        conn.chatRead(remoteJid);
+        const m = await conn.loadMessage(remoteJid, msgId);
+
+        const data: ExtractedContact = JSON.parse(
+          fs.readFileSync(filepath).toString()
+        );
+
+        const replyText = await getReplyText(data);
+        if (replyText) {
+          await conn.sendMessage(
+            // "918882017923-1621625789@g.us",
+            // `_Original text:_\n_${
+            //   JSON.parse(data.debug).message
+            // }_\nReply:\n\n\n${replyText}`,
+            //MessageType.text
+            remoteJid,
+            replyText,
+            MessageType.extendedText,
+            {
+              quoted: m,
+            }
+          );
+        }
+      } else {
+        console.warn("No extracted info: " + filepath);
+      }
+
+      fs.renameSync(filepath, `./temp/Done/${filename}.json`);
+    });
 
     conn.on("close", ({ reason, isReconnecting }) => {
       console.log(
@@ -52,7 +105,7 @@ async function waListener() {
           ", reconnecting: " +
           isReconnecting
       );
-      //watcher.removeAllListeners();
+      watcher.removeAllListeners();
       conn.removeAllListeners("chat-update");
     });
   });
@@ -82,9 +135,9 @@ async function waListener() {
       .all()
       .filter(
         (ch: WAChat) =>
-          +ch.t > lastEpocTime &&
-          (WHITELIST_CHATS.length === 0 ||
-            WHITELIST_CHATS.indexOf(ch.jid) > -1)
+          +ch.t > lastEpocTime 
+          // &&
+          // (WHITELIST_CHATS.length === 0 || WHITELIST_CHATS.indexOf(ch.jid) > -1)
       );
 
     for (let i = 0; i < c.length; i++) {
@@ -134,11 +187,11 @@ async function waListener() {
       sender = m.participant;
     }
 
-    if (WHITELIST_CHATS.length && WHITELIST_CHATS.indexOf(chatId) === -1) {
-      updateTimeStamp(m.messageTimestamp);
-      return;
-    }
-    
+    // if (WHITELIST_CHATS.length && WHITELIST_CHATS.indexOf(chatId) === -1) {
+    //   updateTimeStamp(m.messageTimestamp);
+    //   return;
+    // }
+
     const filename = `${sender}_${chatId}_${m.key.id}.json`;
     const timestamp = m.messageTimestamp.toString();
 
@@ -253,3 +306,101 @@ function bs2(array, left, right, elem) {
 }
 
 waListener().catch((err) => console.log(`encountered error: ${err}`));
+
+async function getReplyText(extractedData: any): Promise<string> {
+  const categoryDetails = getResourceCategory(extractedData.resources);
+  if (categoryDetails) {
+    const params = new URLSearchParams();
+
+    categoryDetails.options.forEach((opt) =>
+      params.append(categoryDetails.category, opt)
+    );
+    params.append("type", "availability");
+    const apiUrl = `https://covidresourcesapi.azurewebsites.net/contacts?count=5&${params.toString()}`;
+
+    const subCategories = categoryDetails.options.join(", ");
+    const categoryText =
+      categoryDetails.category === "bloodgroup"
+        ? `Blood (${subCategories})`
+        : subCategories;
+
+    return axios
+      .get(apiUrl)
+      .then((response) => {
+        const contacts = response.data as IListingContact[];
+        if (contacts && contacts.length) {
+          return (
+            `_Are you looking for ${categoryText}?_\n` +
+            "Here are some latest shared contacts in groups that might help:\n" +
+            `\n${contacts
+              .map(
+                (contact) =>
+                  `*${contact.contactuid}* (${timeDifference(
+                    new Date().getTime(),
+                    new Date(contact.lastShared).getTime()
+                  )})`
+              )
+              .join("\n")}\n` +
+            `\nFor more help go to: https://ishangulati.github.io/covid-resources-portal/#/search?${params.toString()}`
+          );
+        }
+        return (
+          `_Are you looking for ${categoryText}?_\n` +
+          `\nKeep checking our portal for updates: https://ishangulati.github.io/covid-resources-portal/#/search?${params.toString()}`
+        );
+      })
+      .catch(
+        () =>
+          `_Are you looking for ${categoryText}?_\n` +
+          `\nKeep checking our portal for updates: https://ishangulati.github.io/covid-resources-portal/#/search?${params.toString()}`
+      );
+  } else {
+    return null;
+  }
+}
+
+function getResourceCategory(extractedData: IExtractedArrays): {
+  category: string;
+  options: string[];
+} {
+  for (const category of CATEGORIES) {
+    if (extractedData[category] && extractedData[category].length > 0) {
+      return { category, options: extractedData[category] };
+    }
+  }
+  return null;
+}
+
+export const CATEGORIES = [
+  "medicine",
+  "bloodgroup",
+  "therapy",
+  "oxygen",
+  "bed",
+  "ambulance",
+  "food",
+];
+
+function timeDifference(current: number, previous: number) {
+  var msPerMinute = 60 * 1000;
+  var msPerHour = msPerMinute * 60;
+  var msPerDay = msPerHour * 24;
+  var msPerMonth = msPerDay * 30;
+  var msPerYear = msPerDay * 365;
+
+  var elapsed = current - previous;
+
+  if (elapsed < msPerMinute) {
+    return Math.round(elapsed / 1000) + " seconds ago";
+  } else if (elapsed < msPerHour) {
+    return Math.round(elapsed / msPerMinute) + " minutes ago";
+  } else if (elapsed < msPerDay) {
+    return Math.round(elapsed / msPerHour) + " hours ago";
+  } else if (elapsed < msPerMonth) {
+    return Math.round(elapsed / msPerDay) + " days ago";
+  } else if (elapsed < msPerYear) {
+    return Math.round(elapsed / msPerMonth) + " months ago";
+  } else {
+    return Math.round(elapsed / msPerYear) + " years ago";
+  }
+}

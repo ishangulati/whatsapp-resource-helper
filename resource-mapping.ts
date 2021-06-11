@@ -15,6 +15,7 @@ export default {
       "Phosome",
       "Gufisome",
       "Ampholip",
+      "Ambisome",
     ],
     Tocilizumab: ["Tocilizumab", "Actemra", "Tociliizumumab"],
     "Buprenorphine Transdermal": [
@@ -59,6 +60,8 @@ export default {
     Posatral: ["Postral"],
     Medrol: ["Medrol", "Metni"],
     Remdesivir: ["Remdesivir"],
+    Cresemba: ["Cresemba"],
+    Alprazolam: ["Alprazolam", "Xanax"],
   },
   food: {
     Food: ["Food", "Meals", "Langar", "Tiffin", "Cooked meals"],
@@ -89,6 +92,14 @@ export default {
   therapy: {
     Plasma: ["Plasma", "Plazma"],
     ECMO: ["ECMO"],
+  },
+  vaccine: {
+    Covishield: ["Covishield", "Oxford–AstraZeneca"],
+    Covaxin: ["Covaxin", "Bharat Biotech", "BBV152"],
+    Moderna: ["Moderna"],
+    Pfizer: ["Pfizer", "BioNTech"],
+    Sputnik: ["Sputnik"],
+    "Johnson & Johnson": ["Johnson & Johnson"],
   },
   bloodkeywords: [
     "any group",
@@ -128,6 +139,7 @@ export default {
     "reply",
     "for a friend",
     "we'll collect",
+    "please message",
   ],
   cities: [
     "Delhi",

@@ -25,7 +25,10 @@ watcher.on("add", async function (filepath) {
   const resultToWrite = {
     ...messageInfo,
     ...classificationResult,
-    blobfilename: messageInfo.blobfile,
+    link:
+      messageInfo.source === "twitter"
+        ? messageInfo.link
+        : messageInfo.blobfilename,
     timestamp: +timestamp,
     filename,
     source: messageInfo.source || "whatsapp",
